@@ -9,19 +9,49 @@ on:
       - 'lean-toolchain'
 
 jobs:
-  lean-release-tag:
-    name: Add Lean release tag
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-       fetch-depth: 0
-    
-    - name: lean-release-tag action
-      uses: leanprover-community/lean-release-tag@v1
-      with:
-        do-release: true
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build Lean project
+        uses: leanprover/lean-action@v1
+
+      - name: Generate documentation
+        uses: leanprover-community/docgen-action@v1
+        with:
+          deploy: false
+
+      - name: Determine website directory
+        if: github.event_name == 'push'
+        id: site
+        run: |
+          if [ -d docs/_site ]; then
+            echo "path=docs/_site" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=docs" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ steps.site.outputs.path }}
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
